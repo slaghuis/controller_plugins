@@ -1,0 +1,5 @@
+<library path="controller_plugins">
+  <class type="controller_plugins::PurePursuitController" base_class_type="navigation_lite::Controller">
+    <description>Pure pursuit controller to the navigation lite controller server</description>
+  </class>
+</library>
