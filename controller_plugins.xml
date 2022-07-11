@@ -2,4 +2,8 @@
   <class type="controller_plugins::PurePursuitController" base_class_type="navigation_lite::Controller">
     <description>Pure pursuit controller to the navigation lite controller server</description>
   </class>
+  <class type="controller_plugins::VhfPlusController" base_class_type="navigation_lite::Controller">
+    <description>3DVHF+ controller to the navigation lite controller server</description>
+  </class>
+
 </library>

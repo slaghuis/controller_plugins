@@ -20,16 +20,39 @@ find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_ros REQUIRED)
 find_package(navigation_lite REQUIRED)
 find_package(pluginlib REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(tf2_msgs REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+find_package(octomap REQUIRED)
+find_package(octomap_msgs REQUIRED)
+find_package(Eigen3 REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+
 
 add_library(controller_plugins 
-  src/pure_pursuit_controller.cpp)
+  src/pure_pursuit_controller.cpp
+  src/vhf_plus_controller.cpp
+  src/histogram.cpp
+  src/utils.cpp)
 target_include_directories(controller_plugins PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
+target_link_libraries(controller_plugins 
+  Eigen3::Eigen)    
 ament_target_dependencies( 
   controller_plugins
   "navigation_lite"
   "pluginlib"
+  "tf2" 
+  "tf2_ros" 
+  "tf2_msgs"
+  "tf2_geometry_msgs"
+  "octomap"
+  "octomap_msgs"
+  "geometry_msgs"
+  "nav_msgs"
 )
 
 pluginlib_export_plugin_description_file(navigation_lite controller_plugins.xml)

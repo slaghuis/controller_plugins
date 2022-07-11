@@ -1,76 +1,81 @@
-#ifndef NAVIGATION_LITE__UTILS_HPP_
-#define NAVIGATION_LITE__UTILS_HPP_
+#ifndef NAVIGATION_LITE_UTILS_HPP_
+#define NAVIGATION_LITE_UTILS_HPP_
+
+#include <cmath> // fabs, sqrt, pow
+#include <rclcpp/rclcpp.hpp>
+#include <tf2_ros/buffer.h>
+#include "geometry_msgs/msg/pose.hpp"
+#include "geometry_msgs/msg/pose_stamped.hpp"
+#include "geometry_msgs/msg/point.hpp"
+#include "geometry_msgs/msg/quaternion.hpp"
+#include "nav_msgs/msg/path.hpp"
+
 
 const double PI = 3.14159;
-  
-// Calculate the difference between two angles   
+
+// In C the modulo operation returns a value with the same sign as the dividend.
+// Hence a custom modulo function
+inline double modulo(const double a, const double n) {
+  return a - floor(a/n) * n;
+}
+
+// Returns the difference between two angles x and y as a number 
+// between -180 and 180.  c can be PI for radians, or 180 for degrees. 
 inline double getDiff2Angles(const double x, const double y, const double c)
 {
-  // c can be PI (for radians) or 180.0 (for degrees);
-  double d =  fabs(fmod(fabs(x - y), 2*c));
-  double r = d > c ? c*2 - d : d;
-  
-  double sign = ((x-y >= 0.0) && (x-y <= c)) || ((x-y <= -c) && (x-y> -2*c)) ? 1.0 : -1.0;
-  return sign * r;                                           
-
+  double a = x-y;
+  return modulo( a+c, 2*c) - c;
 }
 
 // Calculate the angle between a line defined by two points and the coordinate axes.
-inline double angle(const double x1, double y1, double x2, double y2)
+// result is in RADIANS
+double angle(const double x1, const double y1, const double x2, const double y2);
+
+/**
+ * @brief Get the L2 distance between 2 geometry_msgs::Poses
+ * @param pos1 First pose
+ * @param pos1 Second pose
+ * @param is_3d True if a true L2 distance is desired (default false)
+ * @return double euclidean distance
+ */
+inline double euclidean_distance(
+  const geometry_msgs::msg::Pose & pos1,
+  const geometry_msgs::msg::Pose & pos2,
+  const bool is_3d = true)
 {
-  if (x2 == x1) 
-    return PI / 2;
-  
-  return atan( (y2-y1) /(x2-x1));
+  double dx = pos1.position.x - pos2.position.x;
+  double dy = pos1.position.y - pos2.position.y;
+
+  if (is_3d) {
+    double dz = pos1.position.z - pos2.position.z;
+    return std::hypot(dx, dy, dz);
+  }
+
+  return std::hypot(dx, dy);
 }
 
-double euclidean_distance( const geometry_msgs::msg::PoseStamped & start,
-                           const geometry_msgs::msg::PoseStamped & goal)
+/**
+ * @brief Get the L2 distance between 2 geometry_msgs::PoseStamped
+ * @param pos1 First pose
+ * @param pos1 Second pose
+ * @param is_3d True if a true L2 distance is desired (default false)
+ * @return double L2 distance
+ */
+inline double euclidean_distance(
+  const geometry_msgs::msg::PoseStamped & pos1,
+  const geometry_msgs::msg::PoseStamped & pos2,
+  const bool is_3d = true)
 {
-//  return sqrt( pow(goal.pose.position.x - start.pose.position.x, 2) +
-//               pow(goal.pose.position.y - start.pose.position.y, 2) +
-//               pow(goal.pose.position.z - start.pose.position.z, 2));
-  return hypot( goal.pose.position.x - start.pose.position.x,
-                goal.pose.position.y - start.pose.position.y,
-                goal.pose.position.z - start.pose.position.z );
-
+  return euclidean_distance(pos1.pose, pos2.pose, is_3d);
 }
 
-// Rather use tf2::getYaw(poses.pose.orientation);
-double getYaw(const geometry_msgs::msg::PoseStamped & pose)
-{
-  double roll, pitch, yaw;
-  
-  tf2::Quaternion q(
-    pose.pose.orientation.x,
-    pose.pose.orientation.y,
-    pose.pose.orientation.z,
-    pose.pose.orientation.w );
-  
-  tf2::Matrix3x3 m(q);
-  m.getRPY(roll, pitch, yaw);
-  
-  return yaw;
-}
+// Returns the yaw from a quaternion
+double getYaw(const geometry_msgs::msg::Quaternion & orientation);
+double getYaw(const geometry_msgs::msg::PoseStamped & pose);
+double getYaw(const geometry_msgs::msg::Pose & pose);
 
-double getYaw(const geometry_msgs::msg::Pose & pose)
-{
-  double roll, pitch, yaw;
-  
-  tf2::Quaternion q(
-    pose.orientation.x,
-    pose.orientation.y,
-    pose.orientation.z,
-    pose.orientation.w );
-  
-  tf2::Matrix3x3 m(q);
-  m.getRPY(roll, pitch, yaw);
-  
-  return yaw;
-}
-
-inline double rad_to_deg(float rad) { return (rad * 180.0) / PI; }
-inline double deg_to_rad(float deg) { return (deg * PI) / 180.0; }
+inline double rad_to_deg(const double rad) { return (rad * 180.0) / PI; }
+inline double deg_to_rad(const double deg) { return (deg * PI) / 180.0; }
 
 template<typename NodeT>
 void declare_parameter_if_not_declared(
@@ -83,6 +88,66 @@ void declare_parameter_if_not_declared(
   if (!node->has_parameter(param_name)) {
     node->declare_parameter(param_name, default_value, parameter_descriptor);
   }
+}
+
+/**
+ * Find first element in iterator that is greater integrated distance than comparevalue
+ */
+template<typename Iter, typename Getter>
+inline Iter first_after_integrated_distance(Iter begin, Iter end, Getter getCompareVal)
+{
+  if (begin == end) {
+    return end;
+  }
+  Getter dist = 0.0;
+  for (Iter it = begin; it != end - 1; it++) {
+    dist += euclidean_distance(*it, *(it + 1));
+    if (dist > getCompareVal) {
+      return it + 1;
+    }
+  }
+  return end;
+}
+
+/**
+ * @brief Calculate the length of the provided path, starting at the provided index
+ * @param path Path containing the poses that are planned
+ * @param start_index Optional argument specifying the starting index for
+ * the calculation of path length. Provide this if you want to calculate length of a
+ * subset of the path.
+ * @return double Path length
+ */
+inline double calculate_path_length(const nav_msgs::msg::Path & path, size_t start_index = 0)
+{
+  if (start_index + 1 >= path.poses.size()) {
+    return 0.0;
+  }
+  double path_length = 0.0;
+  for (size_t idx = start_index; idx < path.poses.size() - 1; ++idx) {
+    path_length += euclidean_distance(path.poses[idx].pose, path.poses[idx + 1].pose);
+  }
+  return path_length;
+}
+
+/**
+ * Find element in iterator with the minimum calculated value
+ */
+template<typename Iter, typename Getter>
+inline Iter min_by(Iter begin, Iter end, Getter getCompareVal)
+{
+  if (begin == end) {
+    return end;
+  }
+  auto lowest = getCompareVal(*begin);
+  Iter lowest_it = begin;
+  for (Iter it = ++begin; it != end; ++it) {
+    auto comp = getCompareVal(*it);
+    if (comp < lowest) {
+      lowest = comp;
+      lowest_it = it;
+    }
+  }
+  return lowest_it;
 }
 
 #endif // NAVIGATION_LITE__UTILS_HPP_
